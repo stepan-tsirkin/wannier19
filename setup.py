@@ -30,7 +30,7 @@ setuptools.setup(
                         'protobuf==3.20.2', # req by ray : https://github.com/ray-project/ray/issues/25205 , https://developers.google.com/protocol-buffers/docs/news/2022-05-06#python-updates
                         'ray[default]',
                         'sympy',
-                        'spglib<2',
+                        'spglib',
                         ],
      url="https://wannier-berri.org",
      packages=setuptools.find_packages(),
