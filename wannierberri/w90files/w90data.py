@@ -92,7 +92,7 @@ class Wannier90data:
                  write_npz_formatted=True,
                  overwrite_npz=False,
                  formatted=tuple(),
-                 files={},
+                 files=[]
                  ):  # ,sitesym=False):
         assert not (read_npz and overwrite_npz), "cannot read and overwrite npz files"
         self.seedname = copy(seedname)
@@ -104,6 +104,8 @@ class Wannier90data:
             self.write_npz_list.update(['mmn', 'eig', 'amn'])
         self.formatted_list = formatted
         self._files = {}
+        for f in files:
+            self.set_file(f)
 
 
     def get_spacegroup(self):

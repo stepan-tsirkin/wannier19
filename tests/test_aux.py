@@ -1,9 +1,10 @@
 """test auxilary functions"""
 
+from random import shuffle
 import numpy as np
 from pytest import approx
 from wannierberri.formula.covariant import _spin_velocity_einsum_opt
-from wannierberri.__utility import vectorize
+from wannierberri.__utility import points_to_mp_grid, vectorize
 
 
 def test_spin_velocity_einsum_opt():
@@ -44,3 +45,12 @@ def test_vectorized_matrix_prod():
         for a, b, c in zip(A, B, C):
             c1 = np.dot(a, b)
             assert c == approx(c1)
+
+def test_points_to_grid():
+    for grid in (2,3,4), (1,1,1), (3,3,3):
+        points = [(i/grid[0],j/grid[1],k/grid[2]) for i in range(grid[0]) for j in range(grid[1]) for k in range(grid[2])]
+        print("points =", points)
+        shuffle(points)
+        print("points shuffled =", points)
+        grid_new = points_to_mp_grid(points)
+        assert grid == grid_new, f"failed for grid {grid} got {grid_new}"

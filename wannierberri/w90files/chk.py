@@ -1,7 +1,7 @@
 from time import time
 import numpy as np
 from .utility import readstr
-from ..__utility import FortranFileR
+from ..__utility import FortranFileR, points_to_mp_grid
 import gc
 from ..__utility import alpha_A, beta_A
 
@@ -470,20 +470,37 @@ class CheckPoint_bare(CheckPoint):
             mmn : `~wannierberri.system.w90_files.MMN`
             """
 
-    def __init__(self, win):
-        print("creating CheckPoint_bare")
-        self.mp_grid = np.array(win.data["mp_grid"])
-        self.kpt_latt = win.get_kpoints()
-        self.real_lattice = win.get_unit_cell_cart_ang()
-        self.num_kpts = self.kpt_latt.shape[0]
-        try:
-            self.num_wann = win["num_wann"]
-        except KeyError:
-            self.num_wann = None
-        try:
-            self.num_bands = win["num_bands"]
-        except KeyError:
-            self.num_bands = None
+    def __init__(self, win=None, 
+                 kpt_latt=None, 
+                 real_lattice=None,
+                 num_bands=None,
+                 num_wann=None):
+        if win is not None:
+            if kpt_latt is None:
+                try:
+                    kpt_latt = win.get_kpoints()
+                except AttributeError:
+                    pass
+            if real_lattice is None:
+                real_lattice = win.get_unit_cell_cart_ang()
+            if num_wann is None:
+                try:
+                    num_wann = win["num_wann"]
+                except KeyError:
+                    pass
+            if num_bands is None:
+                try:
+                    num_bands = win["num_bands"]
+                except KeyError:
+                    pass
+        self.num_bands = num_bands
+        self.num_wann = num_wann    
+        self.real_lattice = real_lattice
+        self.kpt_latt = kpt_latt
+        if self.kpt_latt is not None:
+            self.num_kpts = self.kpt_latt.shape[0]
+            self.mp_grid = np.array( points_to_mp_grid(self.kpt_latt))
+                
         self.win_min = np.array([0] * self.num_kpts)
         self.win_max = np.array([self.num_bands] * self.num_kpts)
         self.recip_lattice = 2 * np.pi * np.linalg.inv(self.real_lattice).T

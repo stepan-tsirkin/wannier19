@@ -139,7 +139,7 @@ class MMN(W90_file):
                     ]).transpose(1, 0, 2),
                 dtype=int)
             bk_latt_unique = np.array([b for b in set(tuple(bk) for bk in bk_latt.reshape(-1, 3))], dtype=int)
-            assert len(bk_latt_unique) == self.NNB
+            assert len(bk_latt_unique) == self.NNB, f"len(bk_latt_unique) = {len(bk_latt_unique)} != {self.NNB} \n bk_latt_unique={bk_latt_unique}, \nbk_latt={bk_latt}\n neighbours={self.neighbours}\n G={self.G}\n kpt_latt={kpt_latt}\n mp_grid={mp_grid}\n recip_lattice={recip_lattice}"
             bk_cart_unique = bk_latt_unique.dot(recip_lattice / mp_grid[:, None])
             bk_cart_unique_length = np.linalg.norm(bk_cart_unique, axis=1)
             srt = np.argsort(bk_cart_unique_length)

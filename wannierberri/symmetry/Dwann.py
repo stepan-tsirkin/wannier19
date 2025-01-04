@@ -24,8 +24,6 @@ class Dwann:
     projection : str
         The projection type. Default is "_" which means "s". 
         (not implemented yet, but should be implemented in the future)
-    orbitals : wannierberri.system.sym_wann_orbitals.Orbitals object
-        The orbitals object that contains the orbitals information.
     spinor : bool
         Whether the Wannier functions are spinors.
 

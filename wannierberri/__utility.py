@@ -11,6 +11,7 @@
 #                                                            #
 # ------------------------------------------------------------
 
+from random import shuffle
 import scipy.io
 import fortio
 import os
@@ -616,3 +617,31 @@ def orthogonalize(u):
     except np.linalg.LinAlgError as e:
         warnings.warn(f"SVD failed with error '{e}', using non-orthogonalized matrix")
         return u
+
+def points_to_mp_grid_1d(points, prec=1e-5):
+    for i in range(1,100):
+        x = points*i
+        x -= np.round(x)
+        if np.all(abs(x))<prec:
+            return i
+    else:
+        raise RuntimeError(f"could not determine the grid for points {points}")
+
+
+def points_to_mp_grid(points, prec=1e-5):
+    """starting from a set of points - find the grid
+    
+    Returns
+    -------
+    tuple(int)
+        3 numbers defining a grid
+    """
+    points = np.array(points)
+    print(points)
+    grid = tuple(points_to_mp_grid_1d(p, prec=prec) for p in points.T)
+    grid_arr = np.array(grid)[None,:]
+    check = np.zeros( grid, dtype=bool)
+    points_int = np.round(points * grid_arr).astype(int) % grid_arr
+    check[points_int]=True
+    assert np.all(check), f"found grid {grid}, but not all points belong to it"
+    return grid

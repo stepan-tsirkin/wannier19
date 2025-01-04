@@ -7,6 +7,7 @@ from .wannierizer import Wannierizer
 from .utility import select_window_degen, print_centers_and_spreads, print_centers_and_spreads_chk
 from ..__utility import vectorize
 from ..symmetry.symmetrizer_sawf import VoidSymmetrizer
+from ..w90files.chk import CheckPoint_bare
 
 
 def wannierise(w90data,
@@ -125,7 +126,6 @@ def wannierise(w90data,
 
     if init == "amn":
         amn = w90data.amn.data
-        w90data.chk.num_wann = w90data.amn.NW
     elif init == "random":
         if sitesym:
             num_wann = symmetrizer.num_wann
@@ -133,7 +133,6 @@ def wannierise(w90data,
             assert num_wann is not None, "num_wann should be provided for random initialization without sitesymmetry"
         amnshape = (w90data.mmn.NK, w90data.mmn.NB, num_wann)
         amn = np.random.random(amnshape) + 1j * np.random.random(amnshape)
-        w90data.chk.num_wann = num_wann
     elif init == "restart":
         assert w90data.wannierised, "The data is not wannierised"
         amn = np.zeros((w90data.mmn.NK, w90data.mmn.NB, w90data.chk.num_wann), dtype=np.complex128)
@@ -144,6 +143,10 @@ def wannierise(w90data,
         print("Restarting from the previous state", amn.shape)
     else:
         raise ValueError("init should be 'amn' or 'random'")
+    
+    if init in ["amn", "random"]:
+        chk = CheckPoint_bare()
+        w90data.set_chk(chk, overwrite=True)
 
     neighbours_all = w90data.mmn.neighbours_unique
     neighbours_irreducible = np.array([[symmetrizer.kpt2kptirr[ik] for ik in neigh]

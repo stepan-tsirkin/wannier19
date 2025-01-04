@@ -85,7 +85,7 @@ class Projection:
 
     @property
     def num_wann_per_site(self):
-        return sum(num_orbitals(o) for o in self.orbitals)
+        return sum(num_orbitals(o) for o in self.orbitals) * (2 if self.spinor else 1)
 
     @property
     def num_points(self):
@@ -93,7 +93,7 @@ class Projection:
 
     @property
     def num_wann(self):
-        return self.num_points * self.num_wann_per_site
+        return self.num_points * self.num_wann_per_site 
 
     @property
     def orbitals_str(self):
@@ -110,6 +110,7 @@ class Projection:
         new = Projection(void=True)
         new.orbitals = self.orbitals
         new.wyckoff_position = self.wyckoff_position
+        new.spinor = self.spinor
         return new
 
     def __add__(self, other):

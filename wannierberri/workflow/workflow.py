@@ -1,4 +1,3 @@
-from collections import defaultdict
 import copy
 import os
 import pickle
@@ -7,9 +6,10 @@ import warnings
 from irrep.bandstructure import BandStructure
 from matplotlib import pyplot as plt
 import numpy as np
+from wannierberri.symmetry.symmetrizer_sawf import SymmetrizerSAWF
+from wannierberri.w90files.amn import amn_from_bandstructure
 from wannierberri.w90files.w90data import FILES_CLASSES
-from ..w90files.dmn import DMN
-from ..wannierise.projections import ORBITALS, ProjectionsSet
+from ..wannierise.projections import num_orbitals
 from ..w90files import WIN, Wannier90data
 from .. parallel import Serial as wbSerial
 from .ase import write_espresso_in
@@ -108,113 +108,113 @@ class Executables:
         os.system(f'{self.bandsx} -i {f_in} > {f_out}')
 
 
-class FlagsCalculated:
-    """
-    Class to keep track of the quantities that have been calculated
+# class FlagsCalculated:
+#     """
+#     Class to keep track of the quantities that have been calculated
 
-    Parameters
-    ----------
-    flags: list(str)
-        List of flags
-    depend: dict(str, list(str))
-        Dictionary with the flags that each flag depends on.
-        i.e. if the other flags are not calculated, the current flag cannot be calculated
-        fro the dependance calculation will be triggered
-    map_forward: dict(str, list(str))
-        Dictionary with the flags that each flag sets to False when it is set to True
-        i.e. which objects need to be recalculated after the current flag is calculated
-    """
+#     Parameters
+#     ----------
+#     flags: list(str)
+#         List of flags
+#     depend: dict(str, list(str))
+#         Dictionary with the flags that each flag depends on.
+#         i.e. if the other flags are not calculated, the current flag cannot be calculated
+#         fro the dependance calculation will be triggered
+#     map_forward: dict(str, list(str))
+#         Dictionary with the flags that each flag sets to False when it is set to True
+#         i.e. which objects need to be recalculated after the current flag is calculated
+#     """
 
-    def __init__(self, flags=[], depend={}, map_forward={}):
-        self.allflags = flags
-        self.map_backward = defaultdict(list)
-        self.map_backward.update(depend)
-        self.map_forward = defaultdict(list)
-        self.map_forward.update(map_forward)
-        for map in self.map_forward, self.map_backward:
-            for key, value in map.items():
-                assert key in self.allflags, f"Flag {key} not in {self.allflags}"
-                for v in value:
-                    assert v in self.allflags, f"Flag {v} not in {self.allflags}"
-        self.calculated = {flag: False for flag in flags}
+#     def __init__(self, flags=[], depend={}, map_forward={}):
+#         self.allflags = flags
+#         self.map_backward = defaultdict(list)
+#         self.map_backward.update(depend)
+#         self.map_forward = defaultdict(list)
+#         self.map_forward.update(map_forward)
+#         for map in self.map_forward, self.map_backward:
+#             for key, value in map.items():
+#                 assert key in self.allflags, f"Flag {key} not in {self.allflags}"
+#                 for v in value:
+#                     assert v in self.allflags, f"Flag {v} not in {self.allflags}"
+#         self.calculated = {flag: False for flag in flags}
 
-    def __getitem__(self, flag):
-        assert flag in self.allflags, f"Flag {flag} not in {self.allflags}"
-        return self.calculated[flag]
+#     def __getitem__(self, flag):
+#         assert flag in self.allflags, f"Flag {flag} not in {self.allflags}"
+#         return self.calculated[flag]
 
-    def on(self, flag):
-        """
-        Set the flag to True and all the flags that depend on it 
-        (via map_forward) to False
+#     def on(self, flag):
+#         """
+#         Set the flag to True and all the flags that depend on it 
+#         (via map_forward) to False
 
-        Parameters
-        ----------
-        flag: str
-            The flag to set to True
-        """
-        assert flag in self.allflags, f"Flag {flag} not in {self.allflags}"
-        self.calculated[flag] = True
-        for f in self.map_forward[flag]:
-            self.off(f)
+#         Parameters
+#         ----------
+#         flag: str
+#             The flag to set to True
+#         """
+#         assert flag in self.allflags, f"Flag {flag} not in {self.allflags}"
+#         self.calculated[flag] = True
+#         for f in self.map_forward[flag]:
+#             self.off(f)
 
-    def off(self, flag):
-        """
-        Set the flag to False and all the flags that depend on it
-        (via map_backward) to False
+#     def off(self, flag):
+#         """
+#         Set the flag to False and all the flags that depend on it
+#         (via map_backward) to False
 
-        Parameters
-        ----------
-        flag: str
-            The flag to set to False
-        """
-        assert flag in self.allflags, f"Flag {flag} not in {self.allflags}"
-        self.calculated[flag] = False
-        for f in self.map_forward[flag]:
-            self.off(f)
+#         Parameters
+#         ----------
+#         flag: str
+#             The flag to set to False
+#         """
+#         assert flag in self.allflags, f"Flag {flag} not in {self.allflags}"
+#         self.calculated[flag] = False
+#         for f in self.map_forward[flag]:
+#             self.off(f)
 
-    def check(self, flag):
-        """
-        Check if the flag is calculated, and if all the flags that it depends on
-        are calculated
+#     def check(self, flag):
+#         """
+#         Check if the flag is calculated, and if all the flags that it depends on
+#         are calculated
 
-        Parameters
-        ----------
-        flag: str
-            The flag to check
+#         Parameters
+#         ----------
+#         flag: str
+#             The flag to check
 
-        Returns
-        -------
-        bool
+#         Returns
+#         -------
+#         bool
 
-        Raises
-        ------
-        AssertionError
-            If the flag is not in the list of flags
-            If a flag that is needed for the calculation is not calculated
-        """
-        assert flag in self.allflags, f"Flag {flag} not in {self.allflags}"
-        for f in self.map_backward.get(flag, []):
-            assert self.calculated[f], f"Flag {f} not calculated, needed for {flag}"
-        return self.calculated[flag]
+#         Raises
+#         ------
+#         AssertionError
+#             If the flag is not in the list of flags
+#             If a flag that is needed for the calculation is not calculated
+#         """
+#         assert flag in self.allflags, f"Flag {flag} not in {self.allflags}"
+#         for f in self.map_backward.get(flag, []):
+#             assert self.calculated[f], f"Flag {f} not calculated, needed for {flag}"
+#         return self.calculated[flag]
 
 
-class FlagsCalculatedVoid(FlagsCalculated):
+# class FlagsCalculatedVoid(FlagsCalculated):
 
-    def __init__(self):
-        self.calculated = {"anything": False}
-        pass
+#     def __init__(self):
+#         self.calculated = {"anything": False}
+#         pass
 
-    def on(self, flag):
-        pass
+#     def on(self, flag):
+#         pass
 
-    def off(self, flag):
-        pass
+#     def off(self, flag):
+#         pass
 
-    def check(self, flag):
-        return False
+#     def check(self, flag):
+#         return False
 
-    def __getitem__(self, flag):
-        return False
+#     def __getitem__(self, flag):
+#         return False
 
 
 
@@ -255,12 +255,12 @@ class WorkflowQE:
                 pickle_file=None,
                 try_unpickle=True,
                 k_nodes=[[0, 0, 0], [0.5, 0.5, 0.5]],
-                use_flags=False,
+                sitesym=True,
                 kwargs_gen={}, kwargs_gs={}, kwargs_nscf={}, kwargs_bands={}, kwargs_wannier={},
                 ):
 
         warnings.warn("Workflow is not fully implemented yet. It is experimental and may not work as expected. Use it on your own risk")
-
+        self.sitesym = sitesym
         path_to_files = os.path.dirname(prefix)
         if not os.path.exists(path_to_files):
             os.mkdir(path_to_files)
@@ -270,7 +270,8 @@ class WorkflowQE:
         if try_unpickle:
             try:
                 self.unpickle(self.pickle_file)
-                print(f"unpickled {self.pickle_file}, flags are {self.flags.calculated}")
+                # print(f"unpickled {self.pickle_file}, flags are {self.flags.calculated}")
+                print(f"unpickled from {self.pickle_file}")
                 return
             except Exception as e:
                 print(f"Could not unpickle : {e}")
@@ -282,6 +283,8 @@ class WorkflowQE:
         self.executables = Executables() if executables is None else executables
         self.k_nodes = k_nodes
         self.num_bands = num_bands
+        self.bandstructure = None
+        self.projections_set = None
 
         self.kwargs_gen = dict(
             ecutwfc=20,
@@ -330,38 +333,48 @@ class WorkflowQE:
         self.kwargs_nscf["nbnd"] = num_bands
 
 
-        if use_flags:
-            self.flags = FlagsCalculated(
-                ['gs', 'nscf', 'pw2wannier', 'wannier_w90',
-                 'bands_qe', 'bands_wannier_w90',
-                 'wannierise_wberri', 'bands_wannier_wberri',
-                 'win', 'projections', 'dmn'],
-                depend=dict(nscf=['gs'],
-                            pw2wannier=['nscf', 'win'],
-                            win=['nscf', 'projections'],
-                            wannier_w90=['pw2wannier', 'win'],
-                            bands_qe=['gs'],
-                            bands_wannier_w90=['wannier_w90'],
-                            wannierise_wberri=['pw2wannier'],
-                            bands_wannier_wberri=['wannierise_wberri'],
-                            ),
-                map_forward=dict(gs=['nscf', 'bands_qe'],
-                                 nscf=['pw2wannier'],
-                                 pw2wannier=['wannier_w90', 'wannierise_wberri'],
-                                 wannier_w90=['bands_wannier_w90'],
-                                 wannierise_wberri=['bands_wannier_wberri'],
-                                 projections=['win', 'pw2wannier'],
-                                 win=['wannier_w90'],
-                                    ))
-        else:
-            self.flags = FlagsCalculatedVoid()
+        # if use_flags:
+        #     self.flags = FlagsCalculated(
+        #         ['gs', 'nscf', 'pw2wannier', 'wannier_w90',
+        #          'bands_qe', 'bands_wannier_w90',
+        #          'wannierise_wberri', 'bands_wannier_wberri',
+        #          'win', 'projections', 'dmn'],
+        #         depend=dict(nscf=['gs'],
+        #                     pw2wannier=['nscf', 'win'],
+        #                     win=['nscf', 'projections'],
+        #                     wannier_w90=['pw2wannier', 'win'],
+        #                     bands_qe=['gs'],
+        #                     bands_wannier_w90=['wannier_w90'],
+        #                     wannierise_wberri=['pw2wannier'],
+        #                     bands_wannier_wberri=['wannierise_wberri'],
+        #                     ),
+        #         map_forward=dict(gs=['nscf', 'bands_qe'],
+        #                          nscf=['pw2wannier'],
+        #                          pw2wannier=['wannier_w90', 'wannierise_wberri'],
+        #                          wannier_w90=['bands_wannier_w90'],
+        #                          wannierise_wberri=['bands_wannier_wberri'],
+        #                          projections=['win', 'pw2wannier'],
+        #                          win=['wannier_w90'],
+        #                             ))
+        # else:
+        #     self.flags = FlagsCalculatedVoid()
 
         self.pickle()
 
 
-    def ground_state(self, kpts=(8, 8, 8), enforce=False, run=True, **kwargs):
-        if self.flags.check('gs') and not enforce:
-            return
+    def ground_state(self, kpts=(8, 8, 8), run=True, **kwargs):
+        """
+        Do the self-consistent calculation
+
+        Parameters
+        ----------
+        kpts: array-like(3)
+            The k-points grid
+        run: bool
+            If True, run the calculation, if False, just write the input file
+        kwargs: dict
+            Additional parameters for the calculation (inputs to the Quantum Espresso)
+        """
         message("Ground state")
         self.kwargs_gs.update(kwargs)
         f_in = f'{self.prefix}.scf.in'
@@ -372,7 +385,6 @@ class WorkflowQE:
         if run:
             self.executables.run_pw(f_in, f_out)
         message("Done")
-        self.flags.on('gs')
         self.pickle()
 
     def unpickle(self, file):
@@ -383,9 +395,19 @@ class WorkflowQE:
             file = self.pickle_file
         pickle.dump(self, open(file, 'wb'))
 
-    def nscf(self, mp_grid=(4, 4, 4), enforce=False, run=True, **kwargs):
-        if self.flags.check('nscf') and not enforce:
-            return
+    def nscf(self, mp_grid=(4, 4, 4), run=True, set_bandstructure=True, Ecut_loc=100, **kwargs):
+        """
+        Do the non-self-consistent calculation
+
+        Parameters
+        ----------
+        mp_grid: array-like(3)
+            The Monkhorst-Pack grid
+        run: bool
+            If True, run the calculation, if False, just write the input file
+        kwargs: dict
+            Additional parameters for the calculation (inputs to the Quantum Espresso)
+        """
         message("NSCF")
         self.mp_grid = mp_grid
         self.kwargs_nscf.update(kwargs)
@@ -398,26 +420,25 @@ class WorkflowQE:
         if run:
             self.executables.run_pw(f_in, f_out)
         message("Done")
-        self.flags.on('nscf')
         self.pickle()
-
-    def set_projections(self, projections):
+        if set_bandstructure:
+            return self.set_bandstructure(Ecut_loc = Ecut_loc)
+        
+    def set_projections(self, projections_set):
         """
         set projections for future w90 calculations, also updates num_wann and projections_str
 
         Parameters
         ----------
-        projections: ProjectionsSet or list(Projection)
+        projections: ProjectionsSet
             the projections to set
         """
-        if isinstance(projections, list):
-            projections = ProjectionsSet(projections)
-        projections = projections.as_numeric().split_orbitals()
-        print("projections are", projections)
-        self.projections = projections
-        self.num_wann = projections.num_wann * (2 if self.spinor else 1)
-        self.projections_str = projections.write_wannier90(mod1=False, beginend=False, numwann=False)
-        self.flags.on('projections')
+        self.projections_set = projections_set.as_numeric().split_orbitals()
+        print("projections are\n", projections_set)
+        self.num_wann = self.projections_set.num_wann
+        self.projections_str = projections_set.write_wannier90(mod1=False, beginend=False, numwann=False)
+        self.set_amn_internally()
+        self.set_symmetrizer(bands=False, proj=True)
         self.pickle()
 
     def clear(self, *args):
@@ -427,9 +448,7 @@ class WorkflowQE:
             except AttributeError:
                 pass
 
-    def write_win(self, enforce=False, **kwargs):
-        if self.flags.check('win') and not enforce:
-            return
+    def write_win(self,**kwargs):
         data = dict(kpoints=self.kpoints_nscf,
                 unit_cell_cart=self.atoms.get_cell(),
                 atoms_frac=self.atoms.get_scaled_positions(),
@@ -445,12 +464,9 @@ class WorkflowQE:
         data.update(kwargs)
         win = WIN(seedname=None, data=data)
         win.write(self.prefix)
-        self.flags.on('win')
         self.pickle()
 
-    def pw2wannier(self, targets=['eig', 'mmn', 'amn'], enforce=False, run=True, **kwargs):
-        if self.flags.check('pw2wannier') and not enforce:
-            return
+    def pw2wannier(self, targets=['eig', 'mmn'], run=True, **kwargs):
         message("pw2wannier")
         self.executables.run_wannier(self.prefix, pp=True)
         f_in = f'{self.prefix}.pw2wan.in'
@@ -461,77 +477,57 @@ class WorkflowQE:
         if run:
             self.executables.run_pw2wannier(f_in, f_out)
         message("Done")
-        self.flags.on('pw2wannier')
         self.pickle()
 
-    def wannierise_w90(self, enforce=False):
-        if self.flags.check('wannier_w90') and not enforce:
-            return
+    def wannierise_w90(self):
         message("Wannier-w90")
         self.executables.run_wannier(self.prefix)
         message("Done")
-        self.flags.on('wannier_w90')
         self.pickle()
 
-    def wannierise_wberri(self, enforce=False, kwargs_system={}, kwargs_window={}, **kwargs):
-        if self.flags.check('wannierise_wberri') and not enforce:
-            return
-        w90data = Wannier90data(seedname=self.prefix, read_chk=False)
+    def wannierise_wberri(self, kwargs_system={}, kwargs_window={}, init="amn-internal", **kwargs):
+        w90data = Wannier90data(seedname=self.prefix, files=["eig", "mmn",])
+        w90data.set_symmetrizer(self.symmetrizer)
+        if init=="amn-internal":
+            w90data.set_amn(self.amn_int)
+            init_w="amn"
+        elif init=="amn-external":
+            w90data.set_amn()
+            init_w="amn"
+        else:
+            assert init=="random", f"init should be 'amn-internal', 'amn-external' or 'random'. found  '{init}'"
+            init_w="random"
         w90data.apply_window(**kwargs_window)
         # for key in ["amn", "mmn", "eig", "dmn"]:
         #     print (f"w90data[{key}].NB = {w90data.get_file(key).NB}")
-        w90data.wannierise(**kwargs)
+        w90data.wannierise(init=init_w, **kwargs)
         self.system_wberri = System_w90(w90data=w90data, **kwargs_system)
-        self.flags.on('wannierise_wberri')
         self.pickle()
 
-    def get_spacegroup(self, from_sym_file=None):
-        bandstructure = BandStructure(code='espresso',
+    def set_bandstructure(self, Ecut_loc=100):
+        self.bandstructure = BandStructure(code='espresso',
                                       prefix=self.prefix,
-                                      onlysym=True,
-                                    from_sym_file=from_sym_file
-                                    )
-        return bandstructure.spacegroup
-
-    def create_dmn(self, Ecut=30, enforce=False, from_sym_file=None):
-        """
-        Create the DMN file for Wannier90
-
-        Parameters
-        ----------
-        projections: list(tuple)
-            List of tuples with the projections
-            [(f, l), ...]
-            f: np.array(3) or list(np.array(3))
-                The fractional coordinates of the atom (one or more of the orbit)
-            l: str
-                The angular momentum of the projection, e.g. 's', 'p', 'd', 'sp3'
-        Ecut: float
-            The energy cutoff for the plane waves in wave functions
-        enforce: bool
-            If True, recalculate the DMN file even if it has been calculated before
-
-        Notes
-        -----
-        projections here are given again, because previously projections were given as separate, not as orbits
-        TODO : unify his with set_projections
-        """
-
-        bandstructure = BandStructure(code='espresso',
-                                      prefix=self.prefix,
-                                      Ecut=Ecut,
                                       normalize=False,
-                                      from_sym_file=from_sym_file
+                                      Ecut=Ecut_loc
                                     )
-        # bandstructure.spacegroup.show()
-        if enforce or not self.flags.check('dmn'):
-            dmn_new = DMN(empty=True)
-            dmn_new.from_irrep(bandstructure)
-            dmn_new.set_D_wann_from_projections(projections_obj=self.projections, spinor=self.spinor)
-            dmn_new.to_w90_file(self.prefix)
-            self.flags.on('dmn')
+        self.set_symmetrizer()
+        self.set_amn_internally()
+        self.pickle()
+        return self.bandstructure
 
+    def set_symmetrizer(self, bands=True, proj=True):
+        if bands:
+            self.symmetrizer = SymmetrizerSAWF().from_irrep(self.bandstructure)
+        if self.projections_set is not None and proj:
+            self.symmetrizer.set_D_wann_from_projections(projections_obj=self.projections_set)
+    
+    def set_amn_internally(self):
+        if self.projections_set is not None:
+            self.amn_int = amn_from_bandstructure(bandstructure=self.bandstructure, projections_set=self.projections_set)
 
+    @property
+    def spacegroup(self):
+        return self.bandstructure.spacegroup
 
     def calc_bands_wannier_w90(self, kdensity=1000, enforce=False):
         if self.flags.check('bands_wannier_w90') and not enforce:
@@ -543,18 +539,13 @@ class WorkflowQE:
         self.pickle()
 
     def calc_bands_wannier_wberri(self, kdensity=1000, enforce=False):
-        if self.flags.check('bands_wannier_wberri') and not enforce:
-            return
         system = self.system_wberri
         self.path_wannier, self.bands_wannier_wberri = get_wannier_band_structure(system, self.k_nodes, length=kdensity,
                                                                            parallel=self.executables.parallel_wb)
-        self.flags.on('bands_wannier_wberri')
         self.pickle()
 
 
-    def calc_bands_qe(self, kdensity, enforce=False, run=True, **kargs):
-        if self.flags.check('bands_qe') and not enforce:
-            return
+    def calc_bands_qe(self, kdensity,  run=True, **kargs):
         self.kwargs_bands.update(kargs)
         message("Band structure QE")
         prefix_tmp = self.prefix + '_bands'
@@ -585,7 +576,6 @@ class WorkflowQE:
         bands_qe = np.loadtxt(f'{self.prefix}.bands.dat.gnu')
         self.bands_qe = bands_qe[:, 1].reshape(-1, nk)
         message("Done")
-        self.flags.on('bands_qe')
         self.pickle()
 
     def plot(self, show=True, savefig=None, ylim=None):
@@ -660,7 +650,7 @@ def run_pw2wannier(projections=[],
         win["projections"] = projections
     num_wann = 0
     for x in projections:
-        num_wann += ORBITALS.num_orbitals(x.split(":")[1])
+        num_wann += num_orbitals(x.split(":")[1])
     win["num_wann"] = num_wann
     win.update(kwargs_wannier)
     win.write(seedname)

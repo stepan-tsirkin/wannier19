@@ -95,6 +95,9 @@ class SymmetrizerSAWF(DMN):
         kpoints : np.array(float, shape=(npoints,3,))
             the kpoints in fractional coordinates (neede only if the kpoints are not stored in the object yet) 
         """
+        if projections is None and projections_obj is None:
+            print ("No projections provided. nothing to do")
+            return self
         if projections is None:
             projections = []
         if not hasattr(self, "kpoints_all") or self.kpoints_all is None:

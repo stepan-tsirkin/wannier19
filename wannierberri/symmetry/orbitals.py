@@ -216,8 +216,11 @@ class OrbitalRotator:
         self.rotations_cart = np.copy(rotations_cart)
         if len(self.rotations_cart.shape) == 2:
             self.rotations_cart = np.array([rotations_cart])
-        self.orbitals = get_orbitals()
         self.results_dict = {}
+
+    @property
+    def orbitals(self):
+        return get_orbitals()
 
     def __call__(self, orb_symbol, isym=0):
         if (isym, orb_symbol) not in self.results_dict:
