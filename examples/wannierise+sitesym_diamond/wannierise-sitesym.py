@@ -22,7 +22,7 @@ sitesym = True
 # Read the data from the Wanier90 inputs 
 
 t0 = time()
-w90data = wberri.w90files.Wannier90data(seedname='diamond')
+w90data = wberri.w90files.Wannier90data(seedname='diamond', readfiles=['mmn','amn','eig','win'])
 t1 = time()
 if sitesym and generate_dmn:
     from irrep.bandstructure import BandStructure
@@ -43,6 +43,8 @@ t4 = time()
 if sitesym:
     print ("amn_symmetry", symmetrizer.check_amn(w90data.amn.data, warning_precision=1e-4))
 t5 = time()
+
+w90data.apply_window(win_min=-5, win_max=25)
 
 w90data.wannierise(
                 froz_min=0,

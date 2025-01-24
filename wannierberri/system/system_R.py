@@ -344,6 +344,7 @@ class System_R(System):
             spacegroup = SpaceGroup(cell=(self.real_lattice, positions, atom_num),
                                     magmom=magmom, include_TR=True,
                                     spinor=soc)
+            spacegroup.show()
 
             assert len(atom_name) == len(positions), "atom_name and positions should have the same length"
 

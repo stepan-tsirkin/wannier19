@@ -364,7 +364,7 @@ def system_GaAs_sym_tb_wcc():
 @pytest.fixture(scope="session")
 def system_GaAs_sym_tb_wcc_reorder():
     """Create system for GaAs using sym_tb.dat data"""
-    return get_system_GaAs_tb(use_ws=False, symmetrize=True, reorder_spin=True)
+    return get_system_GaAs_tb(use_ws=False, symmetrize=True, sym_wann_method="old", reorder_spin=True)
 
 
 @pytest.fixture(scope="session")

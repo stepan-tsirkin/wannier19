@@ -18,7 +18,7 @@ t0 = time()
 path_data = Path("./pwscf/")  # adjust path if needed to point to the data in the tests fo wannier-berri repository
 
 includeTR = False
-w90data = wberri.w90files.Wannier90data(seedname=str(path_data / "Ni4W"))
+w90data = wberri.w90files.Wannier90data(seedname=str(path_data / "Ni4W"), readfiles=["amn", "mmn", "eig", "win"])
 t1 = time()
 sitesym = True
 

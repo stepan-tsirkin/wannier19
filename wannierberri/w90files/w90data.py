@@ -14,6 +14,7 @@
 
 from functools import cached_property
 from copy import copy
+import warnings
 import numpy as np
 from ..wannierise import wannierise
 
@@ -23,7 +24,6 @@ from .mmn import MMN
 from .amn import AMN
 from .xxu import UIU, UHU, SIU, SHU
 from .spn import SPN
-from .dmn import DMN
 from .chk import CheckPoint, CheckPoint_bare
 
 FILES_CLASSES = {'win': WIN,
@@ -35,7 +35,6 @@ FILES_CLASSES = {'win': WIN,
                 'siu': SIU,
                 'shu': SHU,
                 'spn': SPN,
-                'dmn': DMN,
                 'chk': CheckPoint,
                 }
 
@@ -92,9 +91,10 @@ class Wannier90data:
                  write_npz_formatted=True,
                  overwrite_npz=False,
                  formatted=tuple(),
-                 readfiles=[],
+                 readfiles=tuple(),
                  ):  # ,sitesym=False):
         assert not (read_npz and overwrite_npz), "cannot read and overwrite npz files"
+        self.window_applied = False
         self.seedname = copy(seedname)
         self.read_npz = read_npz
         self.write_npz_list = set([s.lower() for s in write_npz_list])
@@ -104,14 +104,27 @@ class Wannier90data:
             self.write_npz_list.update(['mmn', 'eig', 'amn'])
         self.formatted_list = formatted
         self._files = {}
+        # chk should be set last
+        if 'chk' in readfiles:
+            _readfiles = copy(readfiles)
+            _readfiles.remove('chk')
+            _readfiles.append('chk')
+            readfiles = tuple(_readfiles)
         for f in readfiles:
             self.set_file(f)
+        if 'chk' in readfiles:
+            self.wannierised = True
+        else:
+            assert "win" in readfiles, "either 'chk' or 'win' should be in readfiles"
+            self.set_chk(read=False)
+            self.wannierised = False
+
 
 
     def get_spacegroup(self):
         """
         Get the spacegroup of the system from the symmetrizer object
-        if the dmn file is not set and cannot be read from the npz file, return None
+        if the symmetrizer is not set return None
 
         Returns
         -------
@@ -134,7 +147,7 @@ class Wannier90data:
         """
         self.symmetrizer = symmetrizer
 
-    def set_file(self, key, val=None, overwrite=False,
+    def set_file(self, key, val=None, overwrite=False, allow_applied_window=False,
                  **kwargs):
         """
         Set the file with the key `key` to the value `val`
@@ -153,14 +166,23 @@ class Wannier90data:
             `~wannierberri.w90files.MMN`, `~wannierberri.w90files.EIG`, `~wannierberri.w90files.AMN`, `~wannierberri.w90files.UIU`, `~wannierberri.w90files.UHU`, `~wannierberri.w90files.SIU`, `~wannierberri.w90files.SHU`, `~wannierberri.w90files.SPN`
             for more details        
         """
+        if self.window_applied:
+            if allow_applied_window:
+                warnings.warn("window was applied, so new added files may be inconsistent with the window. It is your responsibility to check it")
+            else:
+                raise RuntimeError("window was applied, so new added files may be inconsistent with the window. To allow it, set allow_applied_window=True (on your own risk)")
         if key == "chk":
-            self.set_chk(val=val, overwrite=overwrite, **kwargs)
+            self.set_chk(val=val, read=True, overwrite=overwrite, **kwargs)
             return
         kwargs_auto = self.auto_kwargs_files(key)
         kwargs_auto.update(kwargs)
         if not overwrite and self.has_file(key):
             raise RuntimeError(f"file '{key}' was already set")
         if val is None:
+            if key == "dmn":
+                raise ValueError("dmn file should not be set anymore. Use the set_symmetrizer method")
+            elif key not in FILES_CLASSES:
+                raise ValueError(f"key '{key}' is not a valid w90 file")
             val = FILES_CLASSES[key](self.seedname, **kwargs_auto)
         self.check_conform(key, val)
         self._files[key] = val
@@ -193,7 +215,8 @@ class Wannier90data:
         self.kpt_mp_grid = [tuple(k) for k in
                             np.array(np.round(self.chk.kpt_latt * np.array(self.chk.mp_grid)[None, :]),
                                      dtype=int) % self.chk.mp_grid]
-        self.mmn.set_bk(mp_grid=self.chk.mp_grid, kpt_latt=self.chk.kpt_latt, recip_lattice=self.chk.recip_lattice)
+        if self.has_file("mmn"):
+            self.mmn.set_bk(mp_grid=self.chk.mp_grid, kpt_latt=self.chk.kpt_latt, recip_lattice=self.chk.recip_lattice)
         self.win_index = [np.arange(self.eig.NB)] * self.chk.num_kpts
 
     def set_amn(self, val=None, **kwargs):
@@ -277,19 +300,16 @@ class Wannier90data:
         ----------
         key : str
             the key of the file, e.g. 'mmn', 'eig', 'amn', 'uiu', 'uhu', 'siu', 'shu', 'spn'
-        kwargs : dict
-            the keyword arguments to be passed to the constructor of the file
-            see `~wannierberri.w90files.W90_file`, 
-            `~wannierberri.w90files.MMN`, `~wannierberri.w90files.EIG`, `~wannierberri.w90files.AMN`, `~wannierberri.w90files.UIU`, `~wannierberri.w90files.UHU`, `~wannierberri.w90files.SIU`, `~wannierberri.w90files.SHU`, `~wannierberri.w90files.SPN`
-            for more details
 
         Returns
         -------
         `~wannierberri.w90files.W90_file`
             the file with the key `key`
         """
+        # if key not in self._files:
+        #     self.set_file(key, **kwargs)
         if key not in self._files:
-            self.set_file(key, **kwargs)
+            raise RuntimeError(f"file '{key}' was not set. Note : implicit set of files is not allowed anymore. Please use set_file() method of the `readfiles` parameter of the constructor")
         return self._files[key]
 
     def check_conform(self, key, this):
@@ -451,20 +471,22 @@ class Wannier90data:
         band_start, band_end : int
             the range of bands to be included (the numeration in the current system, not in the original (if window is applied more than once))
         """
-        new_selected_bands = np.all((self.eig.data >= win_min) * (self.eig.data <= win_max), axis=0)
-        print(f"new_selected_bands = {new_selected_bands}")
+        assert self.has_file('eig'), "eig file is not set - needed to apply window"
+
+        new_selected_bands = np.ones((self.eig.NB), dtype=bool)
         if band_end is not None:
             new_selected_bands[band_end:] = False
         if band_start is not None:
             new_selected_bands[:band_start] = False
-        print(f"new_selected_bands = {new_selected_bands}")
+        select_energy = (self.eig.data < win_max) * (self.eig.data > win_min)
+        select_energy = np.any(select_energy, axis=0)
+        new_selected_bands = new_selected_bands * select_energy
 
-        print(f"new_selected_bands = {new_selected_bands.shape}")
+        print(f"new_selected_bands = {new_selected_bands}")
         _selected_bands = self.selected_bands
         print(f"_selected_bands = {_selected_bands}")
         # if window is applied for the firstr time, the selected bands are all bands
         # and self.selected_bands is bool (=True)
-        print("eig", self.eig.data.shape)
         if _selected_bands is None:
             _selected_bands = np.ones(self.eig.NB, dtype=bool)
         print(f"_selected_bands = {_selected_bands}")
@@ -495,50 +517,12 @@ class Wannier90data:
             if key != 'win' and key != 'chk':
                 print(f"key = {key} ,number of bands = {val.NB}")
                 if hasattr(val, 'data'):
-                    print(f"key = {key} ,number of bands = {val.data.shape}")
+                    print(f"key = {key} ,shape of data= {val.data.shape}")
             if key == 'chk':
                 print(f"key = {key} ,number of bands = {val.num_bands}")
+        self.window_applied = True
 
 
-    # def get_disentangled(self, files=[]):
-    #     """
-    #     after disentanglement, get the Wannier90data object with
-    #     num_wann == num_bands
-
-    #     Parameters
-    #     ----------
-    #     files : list(str)
-    #         the extensions of the files to be read (e.g. 'mmn', 'eig', 'amn', 'uiu', 'uhu', 'siu', 'shu', 'spn', 'dmn')
-    #     """
-    #     assert self.wannierised, "wannierisation was not performed"
-    #     new_files = {}
-
-    #     v = self.chk.v_matrix
-    #     print("v.shape", v.shape)
-    #     ham_tmp = np.einsum('kml,km,kmn->kln', v.conj(), self.eig.data, v)
-    #     print("ham_tmp.shape", ham_tmp.shape)
-    #     EV = [np.linalg.eigh(h_tmp) for h_tmp in ham_tmp]
-    #     eig_new = EIG(data=np.array([ev[0] for ev in EV]))
-    #     # v_right = np.array([_v @ ev[1].T.conj() for ev, _v in zip(EV,v)])
-    #     v_right = np.array([_v @ ev[1] for ev, _v in zip(EV, v)])
-
-    #     v_left = v_right.conj().transpose(0, 2, 1)
-
-
-    #     for file in files:
-    #         if file == 'eig':
-    #             new_files['eig'] = eig_new
-    #         else:
-    #             new_files[file] = self.get_file(file).get_disentangled(v_left, v_right)
-    #             if file == 'mmn':
-    #                 new_files[file].neighbours = self.mmn.neighbours
-    #                 new_files[file].ib_unique_map = self.mmn.ib_unique_map
-    #                 new_files[file].G = self.mmn.G
-    #     win = deepcopy(self.win)
-    #     win.NB = self.chk.num_wann
-    #     new_files['win'] = win
-    #     other = Wannier90data(read_chk=False, files=new_files)
-    #     return other
 
 
     def check_symmetry(self, silent=False):
@@ -556,63 +540,6 @@ class Wannier90data:
     def set_random_symmetric_projections(self):
         """
         Set random symmetric projections for the system,
-        according to the dmn file
+        according to the symmetrizer object
         """
-        self.set_file("amn", self.dmn.get_random_amn(), overwrite=True)
-
-    # def set_d_band(self, bandstructure, overwrite=False):
-    #     """
-    #     Set the d-band from the bandstructure object
-
-    #     Parameters
-    #     ----------
-    #     bandstructure : irrep.bandstructure.BandStructure
-    #         the bandstructure object
-    #     overwrite : bool
-    #         if False and the dmn file already exists, raise an error
-    #     """
-    #     dmn_new = DMN(empty=True)
-    #     dmn_new.from_irrep(bandstructure)
-    #     self.set_file("dmn", dmn_new, overwrite=overwrite)
-
-    # def set_D_wann_from_projections(self, projections):
-    #     """
-    #     Set the Dwann matrix from the projections
-
-    #     Parameters
-    #     ----------
-    #     projections : list(tuple(np.array(3), str))
-    #         the list of projections, each element is a tuple of the position of the projection and the orbital type
-    #     """
-    #     if "dmn" not in self._files:
-    #         raise RuntimeError("First set the bands part of dmn file")
-    #     self.dmn.set_D_wann_from_projections(projections=projections)
-
-
-
-
-    # TODO : allow k-dependent window (can it be useful?)
-    # def apply_outer_window(self,
-    #                  win_min=-np.inf,
-    #                  win_max=np.inf ):
-    #     raise NotImplementedError("outer window does not work so far")
-    #     "Excludes the bands from outside the outer window"
-    #
-    #     def win_index_nondegen(ik,thresh=DEGEN_THRESH):
-    #         "define the indices of the selected bands, making sure that degenerate bands were not split"
-    #         E=self.Eig[ik]
-    #         ind=np.where( ( E<=win_max)*(E>=win_min) )[0]
-    #         while ind[0]>0 and E[ind[0]]-E[ind[0]-1]<thresh:
-    #             ind=[ind[0]-1]+ind
-    #         while ind[0]<len(E) and E[ind[-1]+1]-E[ind[-1]]<thresh:
-    #             ind=ind+[ind[-1]+1]
-    #         return ind
-    #
-    #     # win_index_irr=[win_index_nondegen(ik) for ik in self.Dmn.kptirr]
-    #     # self.excluded_bands=[list(set(ind)
-    #     # self.Dmn.select_bands(win_index_irr)
-    #     # win_index=[win_index_irr[ik] for ik in self.Dmn.kpt2kptirr]
-    #     win_index=[win_index_nondegen(ik) for ik in self.iter_kpts]
-    #     self._Eig=[E[ind] for E, ind in zip(self._Eig,win_index)]
-    #     self._Mmn=[[self._Mmn[ik][ib][win_index[ik],:][:,win_index[ikb]] for ib,ikb in enumerate(self.mmn.neighbours[ik])] for ik in self.iter_kpts]
-    #     self._Amn=[self._Amn[ik][win_index[ik],:] for ik in self.iter_kpts]
+        self.set_file("amn", self.symmetrizer.get_random_amn(), overwrite=True)

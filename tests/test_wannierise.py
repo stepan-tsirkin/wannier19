@@ -42,7 +42,7 @@ def test_wanierise():
     symmetrizer.spacegroup.show()
     symmetrizer.to_w90_file(prefix)
     # Read the data from the Wanier90 inputs
-    w90data = wberri.w90files.Wannier90data(seedname=prefix)
+    w90data = wberri.w90files.Wannier90data(seedname=prefix, readfiles=["amn", "mmn", "eig", "win"])
     w90data.set_symmetrizer(symmetrizer=symmetrizer)
     # Now disentangle with sitesym and frozen window (the part that is not implemented in Wanier90)
     w90data.wannierise(
@@ -75,7 +75,7 @@ def test_wanierise():
 
 
     systems["wberri_symmetrized"].symmetrize2(symmetrizer=symmetrizer)
-    
+
     # Now calculate bandstructure for each of the systems
     # for creating a path any of the systems will do the job
     system0 = list(systems.values())[0]
@@ -187,12 +187,15 @@ def test_create_sawf_Fe(check_sawf, include_TR):
 
 
 @pytest.mark.parametrize("include_TR", [True, False])
-def test_sitesym_Fe(include_TR):
+@pytest.mark.parametrize("use_window", [True, False])
+def test_sitesym_Fe(include_TR, use_window):
     path_data = os.path.join(ROOT_DIR, "data", "Fe-444-sitesym")
-    w90data = wberri.w90files.Wannier90data(seedname=path_data + "/Fe")
+    w90data = wberri.w90files.Wannier90data(seedname=path_data + "/Fe", readfiles=["amn", "eig", "mmn", "win"])
 
     symmetrizer = SymmetrizerSAWF().from_npz(path_data + f"/Fe_TR={include_TR}.sawf.npz")
     w90data.set_symmetrizer(symmetrizer)
+    if use_window:
+        w90data.apply_window(win_min=-8, win_max=50)
     froz_max = 30
     w90data.wannierise(init="amn",
                        froz_min=-8,
@@ -204,7 +207,7 @@ def test_sitesym_Fe(include_TR):
                     localise=True,
                     sitesym=True,
                     )
-    assert np.allclose(w90data.wannier_centers, 0, atol=1e-6)
+    assert np.allclose(w90data.wannier_centers, 0, atol=1e-6), f"wannier_centers differ from 0 by {np.max(abs(w90data.wannier_centers))} \n{w90data.wannier_centers}"
     spreads = w90data.chk._wannier_spreads
     assert np.all(spreads < 2)
     atol = 1e-8

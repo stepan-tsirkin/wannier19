@@ -12,6 +12,7 @@
 # from the translation of Wannier90 code                     #
 # ------------------------------------------------------------#
 
+from collections import defaultdict
 import numpy as np
 import os
 import functools
@@ -21,6 +22,20 @@ from ..__utility import real_recip_lattice, fourier_q_to_R, alpha_A, beta_A
 from .system_R import System_R
 from ..w90files import Wannier90data
 from .ws_dist import wigner_seitz
+
+
+needed_files = defaultdict(lambda: [])
+
+needed_files['AA'] = ['mmn']
+needed_files['BB'] = ['mmn', 'eig']
+needed_files['CC'] = ['uhu', 'mmn']
+needed_files['OO'] = ['uiu', 'mmn']  # mmn is needed here because it stores information on
+needed_files['GG'] = ['uiu', 'mmn']  # neighboring k-points
+needed_files['SS'] = ['spn']
+needed_files['SH'] = ['spn', 'eig']
+needed_files['SR'] = ['spn', 'mmn']
+needed_files['SA'] = ['siu', 'mmn']
+needed_files['SHA'] = ['shu', 'mmn']
 
 
 class System_w90(System_R):
@@ -153,11 +168,16 @@ class System_w90(System_R):
         self.npar = npar
         self.seedname = seedname
         if w90data is None:
+            _needed_files = set(["eig", "chk"])
+            for key in self.needed_R_matrices:
+                _needed_files.update(needed_files[key])
+            _needed_files = list(_needed_files)
             w90data = Wannier90data(self.seedname,
                                     write_npz_list=write_npz_list, read_npz=read_npz, overwrite_npz=overwrite_npz,
+                                    readfiles=_needed_files,
                                     write_npz_formatted=write_npz_formatted,
                                     formatted=formatted)
-            w90data.set_chk(kmesh_tol=kmesh_tol, bk_complete_tol=bk_complete_tol, read=True)
+            # w90data.set_chk(kmesh_tol=kmesh_tol, bk_complete_tol=bk_complete_tol, read=True)
         w90data.check_wannierised(msg="creation of System_w90")
         chk = w90data.chk
         self.real_lattice, self.recip_lattice = real_recip_lattice(chk.real_lattice, chk.recip_lattice)

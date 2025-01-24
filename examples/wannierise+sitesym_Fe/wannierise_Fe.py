@@ -1,7 +1,7 @@
 import wannierberri as wb
 
 path_data = "../../tests/data/Fe-444-sitesym/"  
-w90data=wb.w90files.Wannier90data(seedname=path_data+"Fe", readfiles=["mmn","eig"]) 
+w90data=wb.w90files.Wannier90data(seedname=path_data+"Fe", readfiles=["mmn","eig", "win"]) 
 
 from irrep.bandstructure import BandStructure
 bandstructure = BandStructure(code='espresso', 
@@ -28,7 +28,7 @@ amn = wb.w90files.amn_from_bandstructure(bandstructure, projections_set=projecti
 w90data.set_symmetrizer(symmetrizer)
 w90data.set_file("amn", amn)
 
-w90data.apply_window(win_min=-8,win_max= 100 )
+w90data.apply_window(win_min=-8,win_max= 50 )
 
 w90data.wannierise( init = "amn",
                     froz_min=-8,

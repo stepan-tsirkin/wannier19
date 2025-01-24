@@ -13,7 +13,7 @@ extras_require = {
                 # https://developers.google.com/protocol-buffers/docs/news/2022-05-06#python-updates
     "fftw"     : ['pyFFTW>=0.12.0'],
     "plot"     : ['matplotlib'],
-    "symmetry" : [ 'sympy', 'spglib>=2', 'irrep>=1.11.0', 'spgrep'],
+    "symmetry" : [ 'sympy', 'spglib>=2', 'irrep==1.11.2', 'spgrep'],
     "phonons"  : [ 'untangle' ],
                 }
 
